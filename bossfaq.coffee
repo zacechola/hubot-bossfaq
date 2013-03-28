@@ -43,10 +43,10 @@ module.exports = (robot) ->
     day = new Date().getDay()
 
     if isBoss(sender) is true
-      if time > 16
-        msg.send "It's after 4p.m."
-      else if time > 16 and day is 5
+      if time > 16 and day is 5
         msg.send "Fuck it. Let's ship. What could go wrong?"
+      else if time > 16
+        msg.send "It's after 4p.m."
       else
         response = [
            'Who knows?',
