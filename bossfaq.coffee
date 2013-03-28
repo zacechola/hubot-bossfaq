@@ -1,32 +1,34 @@
-###
-#
 # Description:
 #   'If you have to do it more than 3 times, script it.'
 #   We have to answer lots of the same questions from our boss in IRC.
 #   Until now.
 #
 # Dependencies:
+#   Our specific jenkins-bot set up for IRC
 #   Our boss
+#
+# Configuration:
+#  HUBOT_BOSSFAQ_BOSS
 #
 # Author:
 #   Zac Echola @zacechola
 #   With respect to Dustin Rue for issuing this code challenge
-###
 
 module.exports = (robot) ->
 
-  builds ?= {}
+  builds = {}
+  boss = process.env.HUBOT_BOSSFAQ_BOSS
 
   # We'll be doing this often
-  isWelle = (sender) ->
-    if sender is "cwelle" or sender is "chriswelle"
+  isBoss = (sender) ->
+    if sender is boss
       return true
 
 
   ###
   #
   # We have a process of not breaking anything on Fridays, because nobody likes
-  # working over the weekend fixing horrible bugs. Still, cwelle asks for
+  # working over the weekend fixing horrible bugs. Still, the boss asks for
   # launches at awful times sometimes. 
   #
   # This section reminds him of the time of the day/week, so we don't
@@ -40,7 +42,7 @@ module.exports = (robot) ->
     time = new Date().getHours()
     day = new Date().getDay()
 
-    if isWelle(sender) is true
+    if isBoss(sender) is true
       if time > 16
         msg.send "It's after 4p.m."
       else if time > 16 and day is 5
@@ -60,24 +62,25 @@ module.exports = (robot) ->
 
   ###
   #
-  # Page drue and zechola when the boss wants a staging push
+  # Page drue and zechola when the the boss wants a staging push
   # He often asks, but neither of us are paying attention to the chatroom.
   # Sometimes hours go by and he'll ask more than once before we notice it.
   #
   # TODO:
   #   Make the robots checkout the code to the staging branch when asked?
+  #   Allow for configuration of who to page
   ###
 
   robot.hear /push.*staging|staging.*push/i, (msg) ->
     sender = msg.message.user.name.toLowerCase()
-    if isWelle(sender) then msg.send "Paging drue, zechola."
+    if isBoss(sender) then msg.send "Paging drue, zechola."
 
 
   ###
   #
   # Something is building right now. It never fails that he notices something
   # is 'broken' in the middle of a build. The robots announce builds to the room
-  # but it's like cwelle is impervious to noticing those announcements.
+  # but it's like the boss is impervious to noticing those announcements.
   #
   # This is a gentile reminder that yes, there are still builds running. They
   # take time to complete.
@@ -101,21 +104,24 @@ module.exports = (robot) ->
     tmp = new Build number, name
     builds[tmp.number] = tmp
 
-  # Destroys builds when they end
-  robot.hear /build (#(.*)): (SUCCESS|FAILURE|STILL FAILING|FIXED) in/i, (msg) ->
+  # Destroys builds when they end and logs recent failures
+  # TODO:
+  #   Log recent failures and aborts, as those explain why things are actually
+  #   broken rather than temporarily broken
+  robot.hear /build (#(.*)): (SUCCESS|FAILURE|STILL FAILING|FIXED|ABORTED) in/i, (msg) ->
     number = msg.match[2]
     if builds[number]
       delete builds[number]
 
 
-  # Listen for questions from cwelle while there are active builds and respond
+  # Listen for questions from the boss while there are active builds and respond
   robot.hear /(.*\?)/i, (msg) ->
     sender = msg.message.user.name.toLowerCase()
 
 
-    if isWelle(sender) is true and Object.keys(builds).length > 0
+    if isBoss(sender) is true and Object.keys(builds).length > 0
 
-      # Let's try to guess what cwelle is talking about in the most rudimentary
+      # Let's try to guess what the boss is talking about in the most rudimentary
       # way possible
       msg_test = switch
           when msg.indexOf('production') > -1 then 'production'
@@ -145,38 +151,42 @@ module.exports = (robot) ->
         name = builds[k].name
         number = builds[k].number
 
-        # Find builds directly related to cwelle's question, else send all active
+        # Find builds directly related to the boss's question, else send all active
         switch
           when name.toLowerCase().indexOf(msg_test) > -1 then still_building(number, name)
           else still_building(number, name)
 
   ###
   #
-  # This extra credit section will keep a record of all things cwelle says in 
+  # This extra credit section will keep a record of all things the boss says in 
   # chat. It will then learn from direct responses to him from devs in the 
-  # chatroom. Over time, Hubot will begin responding to cwelle about common
+  # chatroom. Over time, Hubot will begin responding to the boss about common
   # things he brings up, using our past responses as its answers.
+  #
+  # TODO:
+  #   Once we've recorded phrases from the boss and our responses, we'll need to
+  #   figure out how we can get the robot to respond to common questions with
+  #   seemingly appropriate statements from the developers.
   #
   ###
 
   robot.hear /^(.*)/i, (msg) ->
     sender = msg.message.user.name.toLowerCase()
 
-    robot.brain.data.chrisfaq ?= []
+    robot.brain.data.bossfaq ?= []
 
     # Did the boss just speak? What did he say?
-    if isWelle(sender)
-      cwelle_said is on
+    if isBoss(sender)
+      boss_said is on
       said = msg.match[1]
 
-    # Direct responses to cwelle immediately after he has spoken are recorded
+    # Direct responses to the boss immediately after he has spoken are recorded
     # We'll record this for data science until I come up with a good method
     # for selecting the best responses.
-    if msg.indexOf('cwelle') or msg.indexOf('chriswelle') and cwelle_said is on
-      cwelle_said is off
+    if msg.indexOf(boss) and boss_said is on
+      boss_said is off
       response = msg.match[1]
       from = msg.message.user.name.toLowerCase()
-      robot.brain.data.chrisfaq.push { said: said, response: response, from: from }
+      robot.brain.data.bossfaq.push { said: said, response: response }
     else
-      cwelle_said is off
-
+      boss_said is off
